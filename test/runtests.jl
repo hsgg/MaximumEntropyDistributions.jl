@@ -2,6 +2,7 @@ using MaximumEntropyDistributions
 using Test
 using Printf
 using StatsBase
+using UnicodePlots
 
 @testset "MaximumEntropyDistributions.jl" begin
     xmin = -5.0
@@ -15,7 +16,7 @@ using StatsBase
 
     println("=== MaxEnt PDF for x ∈ [$(xmin), $(xmax)] ===\n")
 
-    for N in 1:5
+    for N in 1:10
         m = MaxEntPDF(xmin, xmax, moments(N); n_quad=1000)
         println("N = $N moments")
         println("  λ         = ", round.(m.λ, sigdigits=6))
@@ -40,15 +41,22 @@ using StatsBase
         println()
     end
 
-    m  = MaxEntPDF(xmin, xmax, moments(5))
-    xs = range(xmin, xmax, length=20)
-    ps = m.(xs)
-    ps_norm = ps ./ maximum(ps)
-    @test all(isfinite.(ps))
 
-    println("PDF shape (N=$(length(m.λ)), normalised to peak):")
-    for (x, p) in zip(xs, ps_norm)
-        bar = "█" ^ round(Int, 40 * p)
-        @printf "  x = %7.4f  %s\n" x bar
+    # UnicodePlots comparison: true Gaussian vs MaxEnt fits
+    xs_plot = range(xmin, xmax, length=300)
+    gaussian(x) = exp(-x^2 / 2) / sqrt(2π)
+
+    plt = lineplot(collect(xs_plot), gaussian.(xs_plot);
+        name   = "Gaussian",
+        title  = "MaxEnt vs Gaussian N(0,1)",
+        xlabel = "x",
+        ylabel = "p(x)",
+        width  = 80,
+        height = 20,
+    )
+    for N in 1:10
+        mN = MaxEntPDF(xmin, xmax, moments(N); n_quad=1000)
+        lineplot!(plt, collect(xs_plot), mN.(xs_plot); name = "MaxEnt N=$N")
     end
+    println(plt)
 end
