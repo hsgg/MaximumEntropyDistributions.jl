@@ -122,7 +122,13 @@ function fit_maxent_lambdas(xmin, xmax, μ_target;
 
         norm(g) < tol && break
 
-        Δλ = H \ g
+        local Δλ
+        try
+            Δλ = H \ g
+        catch e
+            e isa SingularException || rethrow(e)
+            Δλ = pinv(H) * g
+        end
         g_norm = norm(g)
         step = 1.0
         for _ in 1:20
