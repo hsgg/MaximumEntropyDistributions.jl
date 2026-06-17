@@ -1,6 +1,8 @@
-# MaximumEntropyDistributions
+# MaximumEntropyDistributions.jl
 
 [![Build Status](https://github.com/hsgg/MaximumEntropyDistributions.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/hsgg/MaximumEntropyDistributions.jl/actions/workflows/CI.yml?query=branch%3Amain)
+
+WARNING: this README has not been proof-read, yet.
 
 Reconstruct a continuous probability distribution on a bounded interval
 `[xmin, xmax]` from a small set of known moments, using the maximum entropy
@@ -17,9 +19,8 @@ When we know only a few summary statistics of a distribution, many PDFs are
 consistent with those constraints. The **maximum entropy principle** (Jaynes
 1957) provides a principled way to choose among them: pick the distribution
 that has the *largest Shannon entropy*,
-
 ```math
-H[P] = -\int P(x) \ln P(x) dx
+H[P] = -\int_{x_{\rm min}}^{x_{\rm max}} P(x) \, \ln P(x) \, dx
 ```
 
 subject to the moment constraints. Entropy measures how "spread out" or
@@ -29,22 +30,20 @@ implicitly inject information that was not in the data.
 
 ### The constrained optimization problem
 
-Formally, we solve:
-
-```
-maximize  H[P] = -∫ P(x) ln P(x) dx
-subject to  ∫ P(x) xⁿ dx = μₙ ,  n = 1, …, N
-            ∫ P(x) dx = 1
-            P(x) = 0  outside [xmin, xmax]
+Formally, we maximize $H[P]$ subject to the constraints
+```math
+\begin{align}
+\int P(x) \, dx &= 1 , \\
+\int P(x) \, x^n \, dx &= \mu_n , \text{for }  n = 1, \ldots, N \\
+P(x) &= 0  \text{ outside } [xmin, xmax] \,.
+\end{align}
 ```
 
 Introducing Lagrange multipliers λ₁, …, λₙ for the moment constraints (and
 λ₀ for normalization), the calculus of variations gives the unique solution:
-
+```math
+P(x) = \frac{1}{Z}\,e^{-λ₁ x - λ₂ x² - … - λₙ xᴺ}
 ```
-P(x) = exp(-λ₁ x - λ₂ x² - … - λₙ xᴺ) / Z
-```
-
 where the partition function `Z = ∫ exp(-∑ λₙ xⁿ) dx` ensures normalization.
 This is an **exponential family** distribution whose sufficient statistics are
 the monomials `x, x², …, xᴺ`.
