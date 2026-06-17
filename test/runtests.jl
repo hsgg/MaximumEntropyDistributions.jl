@@ -4,6 +4,8 @@ using Printf
 using Statistics
 using UnicodePlots
 using Distributions
+using StableRNGs
+using LinearAlgebra
 
 @testset "MaximumEntropyDistributions.jl" begin
     n_samples = 2000
@@ -11,19 +13,20 @@ using Distributions
     n_max     = 6
 
     test_cases = [
-        #  name               dist                  xmin   xmax
-        ("Uniform(0,1)",      Uniform(0, 1),         0.0,   1.0),
-        ("Beta(2,5)",         Beta(2, 5),            0.0,   1.0),
-        ("Beta(0.5,0.5)",     Beta(0.5, 0.5),        0.0,   1.0),
-        ("Normal(0,1)",       Normal(0, 1),          -5.0,  5.0),
-        ("Exponential(1)",    Exponential(1),         0.0,  8.0),
+        #  name               dist                  xmin   xmax   seed
+        ("Uniform(0,1)",      Uniform(0, 1),         0.0,   1.0,  1),
+        ("Beta(2,5)",         Beta(2, 5),            0.0,   1.0,  2),
+        ("Beta(0.5,0.5)",     Beta(0.5, 0.5),        0.0,   1.0,  3),
+        ("Normal(0,1)",       Normal(0, 1),          -5.0,  5.0,  4),
+        ("Exponential(1)",    Exponential(1),         0.0,  8.0,  2),
     ]
 
-    @testset "$name" for (name, dist, xmin, xmax) in test_cases
-        data = rand(dist, n_samples)
+    @testset "$name" for (name, dist, xmin, xmax, seed) in test_cases
+        rng  = StableRNG(seed)
+        data = rand(rng, dist, n_samples)
         all_moments(n) = [moment(data, k) for k in 1:n]
 
-        println("\n=== $name on [$xmin, $xmax] ===")
+        println("\n=== $name on [$xmin, $xmax] (seed=$seed) ===")
 
         for N in 1:n_max
             @show N
@@ -51,5 +54,28 @@ using Distributions
             #lineplot!(plt, collect(xs), mN.(xs); name = "MaxEnt N=$N")
         end
         println(plt)
+    end
+
+    # These seeds reliably expose the Newton-Raphson singularity: the Hessian
+    # H = Cov(x^n, x^m) becomes ill-conditioned for Exponential(1) samples with
+    # N≥5 raw moments.  The solver terminates with a finite Z but a moment residual
+    # orders of magnitude above the convergence tolerance.
+    @testset "Robustness (seeds that trigger singularity)" begin
+        # Seeds discovered by scanning 1:500 for (Exponential(1), N≥5) with raw
+        # moments and checking norm(μ_fit - μ) > 1e-4.
+        bad_cases = [
+            # (seed, dist,          xmin, xmax, N)
+            (1,  Exponential(1),  0.0,  8.0,  5),  # resid ≈ 16
+            (5,  Exponential(1),  0.0,  8.0,  5),  # resid ≈ 19
+            (7,  Exponential(1),  0.0,  8.0,  6),  # resid ≈ 306
+        ]
+        for (seed, dist, xmin, xmax, N) in bad_cases
+            rng  = StableRNG(seed)
+            data = rand(rng, dist, n_samples)
+            μ    = [mean(data .^ k) for k in 1:N]   # raw moments
+            m    = MaxEntPDF(xmin, xmax, μ; n_quad)
+            @test isfinite(m.Z)                          # solver doesn't crash ...
+            @test_broken norm(m.μ_fit .- μ) < 1e-4     # ... but moment matching fails
+        end
     end
 end
