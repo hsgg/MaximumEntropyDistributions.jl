@@ -123,13 +123,18 @@ function fit_maxent_lambdas(xmin, xmax, μ_target;
         norm(g) < tol && break
 
         Δλ = H \ g
+        g_norm = norm(g)
         step = 1.0
         for _ in 1:20
-            λ_new = λ .- step .* Δλ
+            λ_new = λ .+ step .* Δλ
             f_new = exp.(-(X_pow * λ_new))
             if all(isfinite, f_new) && dot(weights, f_new) > 0
-                λ = λ_new
-                break
+                Z_new = dot(weights, f_new)
+                μ_new = X_pow' * ((f_new ./ Z_new) .* weights)
+                if norm(μ_new .- μ_target) < g_norm
+                    λ = λ_new
+                    break
+                end
             end
             step *= 0.5
         end
