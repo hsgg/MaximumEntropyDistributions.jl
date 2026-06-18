@@ -31,12 +31,13 @@ using LinearAlgebra
         for N in 1:n_max
             @show N
             m = MaxEntPDF(xmin, xmax, all_moments(N); n_quad)
+            @test length(m.λ) == N
+            @test length(m.μ_target) == N
+            @test length(m.μ_fit) == N
             @test m.xmin == xmin
             @test m.xmax == xmax
             @test isfinite(m.Z)
-            if dist isa Normal && N >= 2
-                @test m.μ_fit ≈ m.μ_target
-            end
+            @test m.μ_fit ≈ m.μ_target
         end
 
         # Plot true PDF alongside MaxEnt fits for all N
@@ -44,6 +45,7 @@ using LinearAlgebra
         plt = lineplot(collect(xs), pdf.(dist, xs);
             name   = "True PDF",
             title  = "MaxEnt vs $name",
+            color  = :black,
             xlabel = "x",
             ylabel = "p(x)",
             width  = 80,
