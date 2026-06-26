@@ -15,6 +15,7 @@ using LinearAlgebra
     test_cases = [
         #  name               dist                  xmin   xmax   seed
         ("Uniform(0,1)",      Uniform(0, 1),         0.0,   1.0,  1),
+        ("Uniform(0,1) on [-1,1.5]", Uniform(0, 1), -1.0,   1.5,  1),
         ("Beta(2,5)",         Beta(2, 5),            0.0,   1.0,  2),
         ("Beta(0.5,0.5)",     Beta(0.5, 0.5),        0.0,   1.0,  3),
         ("Normal(0,1)",       Normal(0, 1),          -5.0,  5.0,  4),
