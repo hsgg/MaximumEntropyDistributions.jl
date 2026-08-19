@@ -1,6 +1,6 @@
 name = "MaximumEntropyDistributions"
 uuid = "b8584c0b-697e-4406-a707-5a11fa87ded4"
-version = "1.0.0-DEV"
+version = "1.0.0"
 authors = ["Henry Gebhardt <gebhardt@caltech.edu> and contributors"]
 
 [deps]
