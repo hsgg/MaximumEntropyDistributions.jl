@@ -20,6 +20,7 @@ using LinearAlgebra
         ("Beta(0.5,0.5)",     Beta(0.5, 0.5),        0.0,   1.0,  3),
         ("Normal(0,1)",       Normal(0, 1),          -5.0,  5.0,  4),
         ("Exponential(1)",    Exponential(1),         0.0,  8.0,  2),
+        ("LogNormal(1,2)",  LogNormal(0, 0.5),      0.0,   6.0, 10),
     ]
 
     @testset "$name" for (name, dist, xmin, xmax, seed) in test_cases
