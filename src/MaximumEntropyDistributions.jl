@@ -8,7 +8,7 @@ The Lagrange multipliers λ are found by Newton's method, matching target moment
 """
 module MaximumEntropyDistributions
 
-export MaxEntPDF
+export MaxEntPDF, MaxEntPDF_cumulants, moments_to_cumulants, cumulants_to_moments
 
 
 using LinearAlgebra
@@ -68,6 +68,71 @@ end
 function MaxEntPDF(xmin::Real, xmax::Real, μ_target::AbstractVector; kwargs...)
     T = float(promote_type(typeof(xmin), typeof(xmax), eltype(μ_target)))
     return MaxEntPDF(T(xmin), T(xmax), convert(Vector{T}, μ_target); kwargs...)
+end
+
+
+# ── Moment ↔ Cumulant conversion ─────────────────────────────────────────────
+
+"""
+    moments_to_cumulants(μ) -> κ
+
+Convert raw moments `μ = [μ₁, μ₂, …, μₙ]` where `μₖ = ⟨xᵏ⟩` to cumulants
+`κ = [κ₁, κ₂, …, κₙ]` using the standard recursive formula.
+"""
+function moments_to_cumulants(μ::AbstractVector)
+    N = length(μ)
+    κ = similar(μ)
+    for n in 1:N
+        s = μ[n]
+        for j in 1:n-1
+            s -= binomial(n - 1, j - 1) * κ[j] * μ[n - j]
+        end
+        κ[n] = s
+    end
+    return κ
+end
+
+"""
+    cumulants_to_moments(κ) -> μ
+
+Convert cumulants `κ = [κ₁, κ₂, …, κₙ]` to raw moments
+`μ = [μ₁, μ₂, …, μₙ]` where `μₖ = ⟨xᵏ⟩`, using the standard recursive formula.
+"""
+function cumulants_to_moments(κ::AbstractVector)
+    N = length(κ)
+    μ = similar(κ)
+    for n in 1:N
+        s = κ[n]
+        for j in 1:n-1
+            s += binomial(n - 1, j - 1) * κ[j] * μ[n - j]
+        end
+        μ[n] = s
+    end
+    return μ
+end
+
+"""
+    moment_cumulant_jacobian(μ, κ) -> M
+
+Compute the N×N Jacobian matrix `M[n,k] = ∂κₙ/∂μₖ` of the moment→cumulant
+map.  `M` is lower-triangular with unit diagonal and is always invertible.
+"""
+function moment_cumulant_jacobian(μ::AbstractVector, κ::AbstractVector)
+    N = length(μ)
+    T = promote_type(eltype(μ), eltype(κ))
+    M = zeros(T, N, N)
+    for n in 1:N
+        M[n, n] = one(T)
+        for k in 1:n-1
+            s = zero(T)
+            for j in 1:n-1
+                s -= binomial(n - 1, j - 1) * M[j, k] * μ[n - j]
+            end
+            s -= binomial(n - 1, n - k - 1) * κ[n - k]
+            M[n, k] = s
+        end
+    end
+    return M
 end
 
 
@@ -148,6 +213,58 @@ function fit_maxent_lambdas(xmin, xmax, μ_target;
 
     μ_fit, _, Z = compute_moments_and_cov(λ)
     return λ, Z, μ_fit
+end
+
+
+# ── Cumulant-based lambda solver ──────────────────────────────────────────────
+
+"""
+    fit_maxent_from_cumulants(xmin, xmax, κ_target; n_quad=64, tol=1e-12, maxiter=200)
+        -> λ, Z, μ_fit
+
+Solve for the Lagrange multipliers λ such that the MaxEnt distribution
+    P(x) ∝ exp(-∑ λₙ xⁿ)
+on [xmin, xmax] matches the supplied cumulants `κ_target[n]` = κₙ, n = 1…N.
+
+Internally converts cumulants to moments via `cumulants_to_moments` and
+delegates to `fit_maxent_lambdas`.  The cumulant→moment→cumulant path is
+numerically stable because the moment-space Newton iteration uses the
+covariance matrix H as its natural preconditioner.
+
+Returns the multipliers `λ`, the partition function `Z`, and the achieved
+moments `μ_fit` (convert via `moments_to_cumulants(μ_fit)` to check cumulant
+matching).
+"""
+function fit_maxent_from_cumulants(xmin, xmax, κ_target; kwargs...)
+    μ_target = cumulants_to_moments(κ_target)
+    return fit_maxent_lambdas(xmin, xmax, μ_target; kwargs...)
+end
+
+
+# ── Cumulant-based public constructor ─────────────────────────────────────────
+
+"""
+    MaxEntPDF_cumulants(xmin, xmax, κ_target; n_quad=64, tol=1e-12, maxiter=200)
+
+Fit a MaxEnt distribution on [xmin, xmax] matching the supplied cumulants
+`κ_target`, where `κ_target[n]` = κₙ for n = 1, …, N.
+
+Internally converts cumulants to moments and delegates to the moment-based
+Newton solver for numerical stability.
+
+The returned `MaxEntPDF` object is callable: `m(x)` evaluates the PDF at `x`.
+Cumulant accuracy can be checked via `moments_to_cumulants(m.μ_fit) ≈ κ_target`.
+"""
+function MaxEntPDF_cumulants(xmin::T, xmax::T, κ_target::AbstractVector{T}; kwargs...) where {T<:AbstractFloat}
+    λ, Z, μ_fit = fit_maxent_from_cumulants(xmin, xmax, κ_target; kwargs...)
+    μ_target = cumulants_to_moments(κ_target)
+    return MaxEntPDF{T}(xmin, xmax, λ, Z, μ_target, μ_fit)
+end
+
+# Convenience: promote mixed Real inputs to a common float type
+function MaxEntPDF_cumulants(xmin::Real, xmax::Real, κ_target::AbstractVector; kwargs...)
+    T = float(promote_type(typeof(xmin), typeof(xmax), eltype(κ_target)))
+    return MaxEntPDF_cumulants(T(xmin), T(xmax), convert(Vector{T}, κ_target); kwargs...)
 end
 
 

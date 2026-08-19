@@ -101,4 +101,76 @@ using LinearAlgebra
             @test_broken norm(m.μ_fit .- μ) < 1e-4
         end
     end
+
+    # ── Cumulant utilities ────────────────────────────────────────────────────
+
+    @testset "moments_to_cumulants / cumulants_to_moments roundtrip" begin
+        for _ in 1:20
+            N = rand(1:8)
+            μ = rand(N) .* 10 .+ 0.1   # positive moments
+            κ = moments_to_cumulants(μ)
+            @test cumulants_to_moments(κ) ≈ μ atol = 1e-4
+            @test moments_to_cumulants(cumulants_to_moments(κ)) ≈ κ atol = 1e-4
+        end
+    end
+
+    @testset "moment_cumulant_jacobian vs finite differences" begin
+        for _ in 1:10
+            N = rand(2:6)
+            μ = rand(N) .* 5 .+ 0.5
+            κ = moments_to_cumulants(μ)
+            M = MaximumEntropyDistributions.moment_cumulant_jacobian(μ, κ)
+
+            # Compare against finite differences
+            ε = 1e-7
+            M_fd = zeros(N, N)
+            for k in 1:N
+                μ_p = copy(μ); μ_p[k] += ε
+                μ_m = copy(μ); μ_m[k] -= ε
+                κ_p = moments_to_cumulants(μ_p)
+                κ_m = moments_to_cumulants(μ_m)
+                M_fd[:, k] .= (κ_p .- κ_m) ./ (2ε)
+            end
+            @test M ≈ M_fd atol=0.05
+        end
+    end
+
+    # ── MaxEntPDF_cumulants fitting ───────────────────────────────────────────
+
+    @testset "MaxEntPDF_cumulants: $name" for (name, dist, xmin, xmax, seed) in test_cases
+        rng  = StableRNG(seed)
+        data = rand(rng, dist, n_samples)
+        all_moments(n) = [mean(data .^ k) for k in 1:n]
+
+        for N in 1:n_max
+            μ = all_moments(N)
+            κ = moments_to_cumulants(μ)
+
+            m_cum = MaxEntPDF_cumulants(xmin, xmax, κ; n_quad)
+            @test length(m_cum.λ) == N
+            @test isfinite(m_cum.Z)
+
+            # Cumulant matching should be accurate
+            κ_fit = moments_to_cumulants(m_cum.μ_fit)
+            @test κ_fit ≈ κ atol = 1e-6
+        end
+    end
+
+    @testset "MaxEntPDF_cumulants agrees with MaxEntPDF" begin
+        for (name, dist, xmin, xmax, seed) in test_cases
+            rng  = StableRNG(seed)
+            data = rand(rng, dist, n_samples)
+            for N in 1:n_max
+                μ = [mean(data .^ k) for k in 1:N]
+                κ = moments_to_cumulants(μ)
+
+                m_moments = MaxEntPDF(xmin, xmax, μ; n_quad)
+                m_cum     = MaxEntPDF_cumulants(xmin, xmax, κ; n_quad)
+
+                @test m_moments.λ ≈ m_cum.λ atol = 1e-6
+                @test m_moments.Z ≈ m_cum.Z atol = 1e-6
+                @test m_moments.μ_fit ≈ m_cum.μ_fit atol = 1e-6
+            end
+        end
+    end
 end
